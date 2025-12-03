@@ -29,8 +29,6 @@ Un estudiante brillante en matemáticas puede **NO llegar a una carrera STEM** s
 | `local_pct` | % con diploma local (más básico) | Menos preparación para universidad |
 | `enroll_cnt` | Cantidad de estudiantes | Tamaño del distrito |
 | `nyc_ind` | ¿Está en NYC? (1=Sí, 0=No) | NYC tiene 4x más riesgo |
-| `county_name` | Condado | Diferencias geográficas |
-| `subgroup_name` | Grupo demográfico | Detectar sesgos (raza, discapacidad) |
 
 ---
 
@@ -55,143 +53,171 @@ English Language Learner   → 55% graduación
 
 ---
 
-## Objetivos
+## Objetivos y Cumplimiento
 
-1. **Predecir** si un distrito escolar está en riesgo de baja graduación (<80%) para identificar estudiantes que podrían necesitar apoyo adicional
-2. **Identificar** las variables más predictivas del éxito/fracaso escolar a nivel distrito
-3. **Construir** un modelo de clasificación con F1-Score > 0.85
-4. **Analizar** sesgos demográficos (raza, nivel económico, discapacidades)
-5. **Generar insights** para integrar en nuestra app de predicción de carreras
+| # | Objetivo | Resultado | Estado |
+|---|----------|-----------|--------|
+| 1 | Predecir distritos en riesgo (<80% graduación) | Random Forest detecta 85% de distritos en riesgo | ✅ |
+| 2 | Identificar variables más predictivas | dropout_pct (36%), still_enr_pct (26%), reg_adv_pct (22%) | ✅ |
+| 3 | F1-Score > 0.85 | Random Forest: **F1 = 0.90**, CV = 0.898 | ✅ |
+| 4 | Analizar sesgos demográficos | ELL (55%) y Discapacidades (68%) muy por debajo del promedio | ✅ |
+| 5 | Generar insights para la app | Features claras para personalizar recomendaciones | ✅ |
 
 ---
 
 ## Modelos Utilizados
 
-### ¿Por qué probamos 5 modelos?
-
-Cada modelo tiene fortalezas diferentes. Los comparamos para encontrar el mejor para **nuestro problema específico**: detectar distritos en riesgo con datos desbalanceados (89% no riesgo vs 11% riesgo).
+Probamos **6 modelos** para encontrar el mejor para datos desbalanceados (89% no riesgo vs 11% riesgo):
 
 ---
 
 ### 1. Logistic Regression
 
-| Aspecto | Detalle |
-|---------|---------|
-| **Qué hace** | Calcula la probabilidad de riesgo usando una función lineal |
-| **Basado en el EDA** | Usamos las correlaciones que encontramos (dropout 0.54, still_enr 0.44) |
-| **Fortaleza** | Simple e interpretable - podemos ver el peso de cada variable |
-| **Debilidad** | Asume relaciones lineales, puede perder patrones complejos |
-| **Nos ayuda a** | Entender CUÁNTO afecta cada variable (coeficientes) |
+| Métrica | Valor |
+|---------|-------|
+| AUC-ROC | 0.982 |
+| CV F1 | 0.773 |
 
-**Ejemplo de uso:**
-> "Si dropout sube 10%, la probabilidad de riesgo sube X%"
+**¿Qué hace?** Calcula probabilidad de riesgo con función lineal
+**Fortaleza:** Interpretable - vemos el peso de cada variable
+**Limitación:** No captura patrones complejos
 
 ---
 
 ### 2. Decision Tree
 
-| Aspecto | Detalle |
-|---------|---------|
-| **Qué hace** | Crea reglas de decisión tipo "Si dropout > 15% Y reg_adv < 20% → Riesgo" |
-| **Basado en el EDA** | Usa los umbrales que identificamos (ej: <80% = riesgo) |
-| **Fortaleza** | Muy explicable - podemos mostrar el árbol de decisiones |
-| **Debilidad** | Puede memorizar los datos (overfitting) |
-| **Nos ayuda a** | Crear **reglas claras** para identificar riesgo |
+| Métrica | Valor |
+|---------|-------|
+| AUC-ROC | 0.970 |
+| CV F1 | 0.772 |
 
-**Ejemplo de uso:**
-> "Si un distrito tiene >20% dropout Y <25% diplomas avanzados → En riesgo"
+**¿Qué hace?** Crea reglas: "Si dropout > 15% → Riesgo"
+**Fortaleza:** Muy explicable
+**Limitación:** Overfitting (memoriza datos)
 
 ---
 
-### 3. Random Forest 🏆 (GANADOR)
+### 3. Random Forest 🏆 GANADOR
 
-| Aspecto | Detalle |
-|---------|---------|
-| **Qué hace** | Combina 100 árboles de decisión y vota la respuesta |
-| **Basado en el EDA** | Aprovecha TODAS las variables que encontramos importantes |
-| **Fortaleza** | Mejor F1-Score (0.88), más estable, maneja desbalance |
-| **Debilidad** | Más lento, menos interpretable que un solo árbol |
-| **Nos ayuda a** | **Predicción más precisa** + ver importancia de features |
+| Métrica | Valor |
+|---------|-------|
+| AUC-ROC | **0.992** |
+| CV F1 | **0.898** |
+| Recall | 85% |
 
-**Resultados:**
-- F1-Score: **0.88** ✅
-- Feature más importante: `dropout_pct` (36%)
-- Esto confirma lo que vimos en el EDA: el abandono es el mejor predictor
+**¿Qué hace?** Combina 100 árboles y vota
+**Fortaleza:** Mejor balance precisión/recall, muy estable
+**Por qué ganó:** Detecta 73 de 86 distritos en riesgo con solo 3 falsos positivos
 
 ---
 
 ### 4. Gradient Boosting
 
-| Aspecto | Detalle |
-|---------|---------|
-| **Qué hace** | Crea árboles secuenciales donde cada uno corrige errores del anterior |
-| **Basado en el EDA** | Captura patrones complejos como la interacción NYC + dropout |
-| **Fortaleza** | Alto AUC-ROC, captura relaciones no lineales |
-| **Debilidad** | Puede sobreajustar si no se controla |
-| **Nos ayuda a** | Detectar **patrones complejos** que otros modelos pierden |
+| Métrica | Valor |
+|---------|-------|
+| AUC-ROC | 0.985 |
+| CV F1 | 0.864 |
 
-**Ejemplo de uso:**
-> "En NYC, un dropout de 15% es más grave que en zonas rurales" (interacción)
+**¿Qué hace?** Árboles secuenciales que corrigen errores
+**Fortaleza:** Captura patrones complejos
+**Limitación:** Puede sobreajustar
 
 ---
 
-### 5. SVM (Support Vector Machine)
+### 5. XGBoost
 
-| Aspecto | Detalle |
-|---------|---------|
-| **Qué hace** | Encuentra la mejor línea/superficie para separar riesgo vs no riesgo |
-| **Basado en el EDA** | Usa los datos normalizados (StandardScaler) |
-| **Fortaleza** | Robusto cuando hay muchas variables |
-| **Debilidad** | Lento, difícil de interpretar |
-| **Nos ayuda a** | Verificar si los resultados son consistentes con otros modelos |
+| Métrica | Valor |
+|---------|-------|
+| AUC-ROC | 0.987 |
+| CV F1 | 0.885 |
 
----
-
-## Comparación de Resultados
-
-| Modelo | F1-Score | ¿Por qué este resultado? |
-|--------|----------|--------------------------|
-| **Random Forest** | 0.88 | Combina múltiples árboles, reduce varianza |
-| **Gradient Boosting** | 0.86 | Aprende de errores, captura patrones complejos |
-| **Logistic Regression** | 0.78 | Relaciones lineales no capturan toda la complejidad |
-| **Decision Tree** | 0.78 | Un solo árbol puede memorizar ruido |
-| **SVM** | 0.76 | Más difícil de optimizar para datos desbalanceados |
+**¿Qué hace?** Versión optimizada de Gradient Boosting
+**Fortaleza:** Maneja bien el desbalance de clases
+**Usado para:** Validar resultados de Random Forest
 
 ---
 
-## Feature Importance (Random Forest)
+### 6. SVM
 
-Lo que el modelo aprendió coincide con nuestro EDA:
+| Métrica | Valor |
+|---------|-------|
+| AUC-ROC | 0.975 |
+| CV F1 | 0.765 |
+
+**¿Qué hace?** Encuentra superficie óptima para separar clases
+**Fortaleza:** Robusto
+**Limitación:** Lento, difícil de interpretar
+
+---
+
+## Comparación Final de Resultados
+
+| Modelo | CV F1-Score | AUC-ROC | Ranking |
+|--------|-------------|---------|---------|
+| **Random Forest** | 0.898 ± 0.039 | 0.992 | 🥇 |
+| **XGBoost** | 0.885 ± 0.036 | 0.987 | 🥈 |
+| **Gradient Boosting** | 0.864 ± 0.035 | 0.985 | 🥉 |
+| Logistic Regression | 0.773 ± 0.020 | 0.982 | 4 |
+| Decision Tree | 0.772 ± 0.032 | 0.970 | 5 |
+| SVM | 0.765 ± 0.020 | 0.975 | 6 |
+
+---
+
+## Matriz de Confusión - Random Forest
+
+```
+                 Predicho
+              No riesgo  Riesgo
+Real No riesgo    719       3      → 99.6% correcto
+Real Riesgo        13      73      → 84.9% detectados
+```
+
+**Interpretación:**
+- Solo **3 falsas alarmas** (distritos marcados como riesgo que no lo eran)
+- **13 distritos en riesgo no detectados** (área de mejora)
+- **73 de 86 distritos en riesgo correctamente identificados**
+
+---
+
+## Feature Importance - ¿Qué aprendió el modelo?
 
 | Feature | Importancia | Coincide con EDA |
 |---------|-------------|------------------|
-| `dropout_pct` | 36% | ✅ Correlación más alta (0.54) |
-| `still_enr_pct` | 26% | ✅ Segunda correlación (0.44) |
-| `reg_adv_pct` | 22% | ✅ Correlación negativa (-0.38) |
-| `enroll_cnt` | 9% | ✅ Tamaño importa |
-| `local_pct` | 6% | ✅ Menor impacto |
-| `nyc_ind` | 1% | ⚠️ Bajo porque otras variables ya capturan el efecto NYC |
+| `dropout_pct` | **35.9%** | ✅ Correlación 0.54 |
+| `still_enr_pct` | **25.6%** | ✅ Correlación 0.44 |
+| `reg_adv_pct` | **22.4%** | ✅ Correlación -0.38 |
+| `enroll_cnt` | 9.0% | ✅ Tamaño importa |
+| `local_pct` | ~5% | ✅ Menor impacto |
+| `nyc_ind` | ~1% | ⚠️ Ya capturado por otras variables |
+
+**Conclusión:** El modelo aprendió exactamente lo que encontramos en el EDA. El **abandono escolar** es el mejor predictor de riesgo.
 
 ---
 
-## Conclusión
+## Conclusiones
 
 ### ¿Qué modelo elegimos?
 **Random Forest** porque:
-1. Mejor F1-Score (0.88) - supera nuestro objetivo de 0.85
-2. Más estable en cross-validation
-3. Confirma los hallazgos del EDA
+1. ✅ Mejor F1-Score (0.898) - supera objetivo de 0.85
+2. ✅ AUC-ROC más alto (0.992)
+3. ✅ Más estable en cross-validation
+4. ✅ Confirma hallazgos del EDA
 
-### ¿Cómo aplicamos esto?
-| Si el estudiante... | Nuestra app puede... |
-|--------------------|---------------------|
-| Viene de distrito con alto dropout | Mostrar programas de retención y apoyo |
-| Su zona tiene pocos diplomas avanzados | Recomendar cursos de preparación extra |
+### Aplicación en nuestra app de carreras STEM
+
+| Si el estudiante... | La app puede... |
+|--------------------|-----------------|
+| Viene de distrito con alto dropout (>15%) | Mostrar programas de retención y becas |
+| Su zona tiene pocos diplomas avanzados | Recomendar cursos de preparación STEM |
 | Es de NYC | Conectar con recursos específicos de la ciudad |
-| Tiene discapacidad o es ELL | Priorizar universidades con buenos programas de accesibilidad |
+| Tiene discapacidad o es ELL | Priorizar universidades con programas de accesibilidad |
 
 ---
 
-## Siguiente paso
-Integrar el modelo en la app de predicción de carreras STEM para dar recomendaciones personalizadas según el contexto del estudiante.
+## Próximos Pasos
+
+1. Integrar el modelo en la app de predicción de carreras
+2. Crear endpoint API para consultar riesgo por distrito
+3. Diseñar interfaz para mostrar recomendaciones personalizadas
+4. Validar con datos de otros estados
 
